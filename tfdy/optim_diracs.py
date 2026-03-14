@@ -41,7 +41,31 @@ def usa_flow(
     hist = []
     for i in range(max_it):
         #x -= proj_tang(x, sgn * (tau/n) * torch.exp(beta * (x @ (D @ x.T))) @ x @ D.T)
-        x -= sgn * (tau/n) * torch.exp(beta * (x @ (D @ x.T))) @ x @ D.T
+        #x -= sgn * (tau/n) * torch.exp(beta * (x @ (D @ x.T))) @ x @ D.T # this was the original line that was replaced
+        
+        
+        # --- NEW OPTION 2: TAYLOR APPROXIMATION ---
+        #CHANGE THE EPSILON TO 0.0 IF YOU WANT TO MAKE IT SYMMETRIC AGAIN
+        # 1. Define the anti-symmetric perturbation A
+        A = torch.tensor([[ 0.0,  1.0, -0.5], 
+                          [-1.0,  0.0,  0.8], 
+                          [ 0.5, -0.8,  0.0]], dtype=x.dtype, device=x.device)
+        epsilon = 0.3
+        
+        # 2. Calculate the standard symmetric attention weights
+        K_sym = torch.exp(beta * (x @ (D @ x.T)))
+        
+        # 3. Calculate the Taylor perturbation multiplier
+        taylor_factor = 1.0 + beta * epsilon * (x @ (A @ x.T))
+        
+        # 4. Multiply them to get the final perturbed weights
+        K_perturbed = K_sym * taylor_factor
+        
+        # 5. Apply the update step using the perturbed weights
+        x -= sgn * (tau/n) * K_perturbed @ x @ D.T
+        # ------------------------------------------
+        
+        
         x += sigma * torch.normal(0,1, x.shape)
         x /= torch.linalg.vector_norm(x, dim=-1,keepdim=True)
         
